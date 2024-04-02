@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>지렁이 게임</title>
+<style>
+    body {
+        margin: 0;
+        padding: 0;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        color: white; /* 글자색을 흰색으로 설정 */
+    }
+    #game-area {
+        width: 600px;
+        height: 600px;
+        border: 1px solid black;
+        position: relative;
+    }
+    .snake-part {
+        width: 20px;
+        height: 20px;
+        background-color: green;
+        position: absolute;
+    }
+    .eye {
+        width: 4px;
+        height: 4px;
+        background-color: black;
+        position: absolute;
+    }
+    .mouth {
+        width: 10px;
+        height: 2px;
+        background-color: black;
+        position: absolute;
+        border-radius: 2px;
+    }
+    .trap {
+        width: 20px;
+        height: 20px;
+        background-color: blue;
+        position: absolute;
+    }
+    #food {
+        width: 20px;
+        height: 20px;
+        background-color: red;
+        position: absolute;
+    }
+    #score {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+    }
+    #game-over {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        font-size: 24px;
+        font-weight: bold;
+        display: none; /* 게임 오버 메시지는 초기에는 보이지 않음 */
+    }
+</style>
+</head>
+<body>
+
+<div id="game-area"></div>
+<div id="score">Score: 0</div>
+<div id="game-over">Game Over</div>
+
+<script>
+    const body = document.body;
+    const gameArea = document.getElementById('game-area');
+    const scoreDisplay = document.getElementById('score');
+    const gameOverDisplay = document.getElementById('game-over');
+    const snakeParts = [];
+    const traps = [];
+    let foodPosition = { x: 0, y: 0 };
+    let direction = 'right';
+    let score = 0;
+    let gameInterval;
+    let speed = 300; // 기본 속도
+    let keyPressTimer = null; // 방향키 입력 딜레이를 관리할 타이머 변수
+
+    function createSnakePart(x, y, isFirst) {
+        const snakePart = document.createElement('div');
+        snakePart.classList.add('snake-part');
+        snakePart.style.left = x + 'px';
+        snakePart.style.top = y + 'px';
+
+        // 첫 번째 칸에만 눈과 입 추가
+        if (isFirst) {
+            const eye1 = document.createElement('div');
+            eye1.classList.add('eye');
+            eye1.style.left = '5px';
+            eye1.style.top = '5px';
+            snakePart.appendChild(eye1);
+
+            const eye2 = document.createElement('div');
+            eye2.classList.add('eye');
+            eye2.style.left = '13px';
+            eye2.style.top = '5px';
+            snakePart.appendChild(eye2);
+
+            const mouth = document.createElement('div');
+            mouth.classList.add('mouth');
+            mouth.style.left = '5px';
+            mouth.style.top = '13px';
+            snakePart.appendChild(mouth);
+        }
+
+        gameArea.appendChild(snakePart);
+        snakeParts.push(snakePart);
+    }
+
+    function createFood() {
+        const food = document.createElement('div');
+        food.id = 'food';
+        gameArea.appendChild(food);
+        updateFoodPosition();
+    }
+
+    function updateFoodPosition() {
+        const x = Math.floor(Math.random() * 30) * 20;
+        const y = Math.floor(Math.random() * 30) * 20;
+        foodPosition = { x, y };
+        food.style.left = x + 'px';
+        food.style.top = y + 'px';
+    }
+
+    function createTrap() {
+        const trap = document.createElement('div');
+        trap.classList.add('trap');
+        const x = Math.floor(Math.random() * 30) * 20;
+        const y = Math.floor(Math.random() * 30) * 20;
+        trap.style.left = x + 'px';
+        trap.style.top = y + 'px';
+        gameArea.appendChild(trap);
+        traps.push({ x, y });
+    }
+
+    function moveSnake() {
+        let x = parseInt(snakeParts[0].style.left);
+        let y = parseInt(snakeParts[0].style.top);
+
+        switch (direction) {
+            case 'up':
+                y -= 20;
+                break;
+            case 'down':
+                y += 20;
+                break;
+            case 'left':
+                x -= 20;
+                break;
+            case 'right':
+                x += 20;
+                break;
+        }
+
+        if (x < 0 || x >= 600 || y < 0 || y >= 600) {
+            endGame(); // 게임 영역을 벗어나면 게임 종료
+            return;
+        }
+
+        for (let i = 0; i < traps.length; i++) {
+            if (x === traps[i].x && y === traps[i].y) {
+                snakeParts.pop(); // 지렁이 길이를 줄임
+                const tail = snakeParts.pop();
+                tail.remove();
+                if (snakeParts.length === 0) {
+                    endGame(); // 지렁이가 모두 사라지면 게임 종료
+                }
+                break;
+            }
+        }
+
+        if (x === foodPosition.x && y === foodPosition.y) {
+            updateFoodPosition();
+            createSnakePart(x, y, true);
+            score++;
+            scoreDisplay.textContent = 'Score: ' + score;
+            body.style.backgroundColor = getRandomColor(); // 먹이를 먹은 경우 전체 배경 색상 변경
+            increaseSpeed(); // 먹이를 먹으면 속도 증가
+        } else {
+            const tail = snakeParts.pop();
+            tail.style.left = x + 'px';
+            tail.style.top = y + 'px';
+            snakeParts.unshift(tail);
+        }
+
+        const trap = traps[0];
+        const trapX = parseInt(trap.style.left);
+        const trapY = parseInt(trap.style.top);
+
+        // 술레의 위치를 지렁이의 머리 위치로 이동
+        if (trapX < x) {
+            trap.style.left = (trapX + 1) + 'px';
+        } else if (trapX > x) {
+            trap.style.left = (trapX - 1) + 'px';
+        }
+        if (trapY < y) {
+            trap.style.top = (trapY + 1) + 'px';
+        } else if (trapY > y) {
+            trap.style.top = (trapY - 1) + 'px';
+        }
+    }
+
+    function increaseSpeed() {
+        clearInterval(gameInterval);
+        speed /= 2; // 현재 속도를 반으로 줄임
+        gameInterval = setInterval(moveSnake, speed);
+        setTimeout(resetSpeed, 1000); // 1초 후에 속도를 초기 속도로 재설정
+    }
+
+    function resetSpeed() {
+        clearInterval(gameInterval);
+        gameInterval = setInterval(moveSnake, speed);
+    }
+
+    function changeDirection(e) {
+        clearTimeout(keyPressTimer); // 기존의 타이머를 초기화
+
+        switch (e.key) {
+            case 'ArrowUp':
+                if (direction !== 'down') direction = 'up';
+                break;
+            case 'ArrowDown':
+                if (direction !== 'up') direction = 'down';
+                break;
+            case 'ArrowLeft':
+                if (direction !== 'right') direction = 'left';
+                break;
+            case 'ArrowRight':
+                if (direction !== 'left') direction = 'right';
+                break;
+        }
+
+        // 300ms 후에 딜레이가 없으면 딜레이를 다시 초기화
+        keyPressTimer = setTimeout(() => {
+            resetSpeed();
+        }, 300);
+    }
+
+    function endGame() {
+        clearInterval(gameInterval);
+        gameOverDisplay.style.display = 'block'; // 게임이 종료되면 게임 오버 메시지 표시
+    }
+
+    function startGame() {
+        createSnakePart(0, 0, true);
+        createFood();
+        createTrap();
+        gameInterval = setInterval(moveSnake, speed);
+        document.addEventListener('keydown', changeDirection);
+    }
+
+    function getRandomColor() {
+        const letters = '0123456789ABCDEF';
+        let color = '#';
+        for (let i = 0; i < 6; i++) {
+            color += letters[Math.floor(Math.random() * 16)];
+        }
+        return color;
+    }
+
+    startGame();
+</script>
+
+</body>
+</html>
